@@ -1,0 +1,102 @@
+# Task Manager — Канбан-доска с авторизацией
+
+Веб-приложение для управления проектами и задачами в стиле канбан. Поддерживает создание проектов, приглашение участников, задачи с приоритетами, дедлайнами и drag-and-drop перемещением между колонками.
+
+## Технологии
+
+- **Frontend**: HTML5, CSS3, JavaScript (ES6+), IndexedDB (в прошлом), сейчас — REST API.
+- **Backend**: Node.js, Express.
+- **Database**: PostgreSQL.
+- **Контейнеризация**: Docker, Docker Compose.
+
+## Функциональные возможности
+
+- Регистрация и авторизация пользователей (пароли хешируются bcrypt).
+- Создание, редактирование, удаление проектов.
+- Управление участниками проекта (только владелец может добавлять/удалять).
+- Создание задач с названием, описанием, приоритетом (низкий/средний/высокий), дедлайном и исполнителем.
+- Перемещение задач между колонками (To Do, In Progress, Done) через drag-and-drop.
+- Персистентное хранение данных в PostgreSQL.
+- Полная контейнеризация для лёгкого развёртывания.
+
+## Структура проекта
+├── backend/
+│ ├── db/
+│ │ └── init.sql # Схема БД
+│ ├── middleware/
+│ │ └── auth.js # Проверка авторизации (X-User)
+│ ├── routes/
+│ │ ├── auth.js
+│ │ ├── projects.js
+│ │ ├── tasks.js
+│ │ └── members.js
+│ ├── .env.example
+│ ├── Dockerfile
+│ ├── package.json
+│ └── server.js
+├── frontend/
+│ ├── index.html
+│ ├── loginpage.html
+│ ├── register.html
+│ ├── projects.html
+│ ├── task.html
+│ ├── style.css
+│ └── script.js # Клиентская логика (API calls)
+├── docker-compose.yml
+└── README.md
+
+
+## Запуск проекта через Docker Compose (рекомендуемый способ)
+
+### Предварительные требования
+
+- Установленный Docker Desktop (включая Docker Compose).
+- Свободные порты 3000 (бэкенд) и 5432 (PostgreSQL) либо изменённые в `.env`.
+
+### Инструкция
+
+1. **Клонируйте репозиторий**
+   ```bash
+   git clone https://github.com/your-username/task-manager.git
+   cd task-manager
+   ```
+
+2. Создайте файл .env в корне проекта (рядом с docker-compose.yml) со следующим содержимым:
+
+```ini
+DB_HOST=postgres
+DB_PORT=5432
+DB_USER=taskuser
+DB_PASSWORD=taskpass
+DB_NAME=kanban
+PORT=3000
+```
+При необходимости измените пароль и другие параметры.
+
+3. Запустите контейнеры
+
+```bash
+docker-compose up --build
+```
+
+PostgreSQL инициализируется схемой из backend/db/init.sql.
+
+Бэкенд на Node.js будет доступен по адресу http://localhost:3000.
+
+Откройте приложение в браузере:
+
+Перейдите на http://localhost:3000.
+
+Зарегистрируйте нового пользователя или войдите с тестовыми данными (если вы добавили их вручную через init.sql, например).
+
+Остановка контейнеров:
+
+```bash
+docker-compose down
+```
+
+Чтобы удалить данные БД (том), добавьте флаг -v:
+
+```bash
+docker-compose down -v
+```
