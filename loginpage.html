@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Доска задач - Авторизация</title>
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-container">
+            <div class="logo" onclick="window.location.href='index.html'">
+                <div class="logo-icon">📋</div>
+                <div class="logo-text">Доска <span>задач</span></div>
+            </div>
+            <div class="header-nav" id="headerNav">
+                <a href="index.html">Главная</a>
+                <a href="register.html">Регистрация</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="auth-page">
+        <div class="auth-container">
+            <h1>Авторизация</h1>
+            <input type="text" id="loginUsername" class="auth-input" placeholder="Имя пользователя">
+            <input type="password" id="loginPassword" class="auth-input" placeholder="Пароль">
+            <button id="loginBtn" class="auth-btn">Войти</button>
+            <div id="loginMessage" class="auth-message"></div>
+            <div class="back-link">
+                <a href="index.html">← На главную</a>
+                <span style="margin: 0 10px">|</span>
+                <a href="register.html">Нет аккаунта? Зарегистрироваться</a>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>Доска задач | Лемешев Ю.А. | 2026</p>
+    </footer>
+
+    <script src="db.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

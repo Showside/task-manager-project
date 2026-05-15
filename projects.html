@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Доска задач - Мои проекты</title>
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-container">
+            <div class="logo" onclick="window.location.href='index.html'">
+                <div class="logo-icon">📋</div>
+                <div class="logo-text">Доска <span>задач</span></div>
+            </div>
+            <div class="header-nav" id="headerNav"></div>
+        </div>
+    </header>
+
+    <div class="projects-page">
+        <div class="projects-container" id="projectsContainer">
+            <div class="projects-header">
+                <h1>📁 Мои проекты</h1>
+                <div style="display: flex; gap: 10px;">
+                    <button class="create-project-btn" id="createProjectBtn">+ Создать проект</button>
+                </div>
+            </div>
+            
+            <div id="projectsGrid" class="projects-grid">
+                <p style="text-align:center; color:#666;">Загрузка проектов...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для создания/редактирования проекта -->
+    <div id="projectModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Создать проект</h2>
+            <input type="text" id="projectName" placeholder="Название проекта">
+            <textarea id="projectDescription" placeholder="Описание проекта"></textarea>
+            <div class="modal-buttons">
+                <button class="cancel-btn" id="cancelModalBtn">Отмена</button>
+                <button class="save-btn" id="saveProjectBtn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для управления участниками -->
+    <div id="membersModal" class="modal">
+        <div class="modal-content members-modal-content">
+            <h2>👥 Участники проекта</h2>
+            <h3 id="membersProjectName" style="font-size: 16px; color: #667eea; margin-bottom: 10px;"></h3>
+            <div id="membersList" class="members-modal-list">
+            </div>
+            <div class="members-modal-add">
+                <h4>➕ Добавить участника</h4>
+                <div class="add-member-form">
+                    <input type="text" id="newMemberLogin" class="add-member-input" placeholder="Введите логин пользователя">
+                    <button id="addMemberBtn" class="add-member-btn">Добавить</button>
+                </div>
+                <div id="memberMessage" class="member-message"></div>
+            </div>
+            <div class="modal-buttons" style="margin-top: 20px;">
+                <button class="cancel-btn" onclick="closeMembersModal()">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>Доска задач | Лемешев Ю.А. | 2026</p>
+    </footer>
+
+    <script src="db.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

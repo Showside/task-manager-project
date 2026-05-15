@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Доска задач - Kanban</title>
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-container">
+            <div class="logo" onclick="window.location.href='index.html'">
+                <div class="logo-icon">📋</div>
+                <div class="logo-text">Доска <span>задач</span></div>
+            </div>
+            <div class="header-nav" id="headerNav"></div>
+        </div>
+    </header>
+
+    <div class="dashboard-page">
+        <div class="dashboard-container">
+            <div class="header">
+                <div>
+                    <div class="welcome" id="welcomeMessage"></div>
+                    <h2 id="projectTitle" style="color: #667eea; margin-top: 5px;"></h2>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="logout-btn" onclick="window.location.href='projects.html'">← К проектам</button>
+                </div>
+            </div>
+            
+            <div class="kanban-board" id="kanbanBoard">
+                <!-- Колонка To Do -->
+                <div class="kanban-column todo" ondrop="dropTask(event, 'todo')" ondragover="dragOver(event)">
+                    <h3>📝 Сделать</h3>
+                    <div id="todo-tasks"></div>
+                    <button class="add-task-btn" onclick="openCreateTaskModal()">+ Добавить задачу</button>
+                </div>
+                
+                <!-- Колонка In Progress -->
+                <div class="kanban-column in-progress" ondrop="dropTask(event, 'in_progress')" ondragover="dragOver(event)">
+                    <h3>⚙️ В процессе</h3>
+                    <div id="in-progress-tasks"></div>
+                    <button class="add-task-btn" onclick="openCreateTaskModal()">+ Добавить задачу</button>
+                </div>
+                
+                <!-- Колонка Done -->
+                <div class="kanban-column done" ondrop="dropTask(event, 'done')" ondragover="dragOver(event)">
+                    <h3>✅ Выполнено</h3>
+                    <div id="done-tasks"></div>
+                    <button class="add-task-btn" onclick="openCreateTaskModal()">+ Добавить задачу</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для создания/редактирования задачи -->
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <h2>Задача</h2>
+            <input type="text" id="taskTitle" placeholder="Название задачи">
+            <textarea id="taskDescription" placeholder="Описание задачи"></textarea>
+            <select id="taskPriority">
+                <option value="low">Низкий приоритет</option>
+                <option value="medium" selected>Средний приоритет</option>
+                <option value="high">Высокий приоритет</option>
+            </select>
+            <select id="taskAssignee">
+                <option value="">Назначить исполнителя</option>
+            </select>
+            <input type="date" id="taskDeadline" placeholder="Срок выполнения">
+            <div class="modal-buttons">
+                <button class="cancel-btn" onclick="closeTaskModal()">Отмена</button>
+                <button class="save-btn" id="saveTaskBtn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>Доска задач | Лемешев Ю.А. | 2026</p>
+    </footer>
+
+    <script src="db.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

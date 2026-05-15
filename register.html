@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Доска задач - Регистрация</title>
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-container">
+            <div class="logo" onclick="window.location.href='index.html'">
+                <div class="logo-icon">📋</div>
+                <div class="logo-text">Доска <span>задач</span></div>
+            </div>
+            <div class="header-nav" id="headerNav">
+                <a href="index.html">Главная</a>
+                <a href="loginpage.html">Вход</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="auth-page">
+        <div class="auth-container">
+            <h1>Регистрация</h1>
+            <input type="text" id="regUsername" class="auth-input" placeholder="Имя пользователя" autocomplete="off">
+            <input type="email" id="regEmail" class="auth-input" placeholder="Email">
+            <input type="password" id="regPassword" class="auth-input" placeholder="Пароль">
+            <input type="password" id="regConfirmPassword" class="auth-input" placeholder="Подтвердите пароль">
+            <button id="registerBtn" class="auth-btn">Зарегистрироваться</button>
+            <div id="regMessage" class="auth-message"></div>
+            <div class="back-link">
+                <a href="index.html">← На главную</a>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>Доска задач | Лемешев Ю.А. | 2026</p>
+    </footer>
+
+    <script src="db.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
