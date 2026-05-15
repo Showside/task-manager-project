@@ -19,33 +19,6 @@
 - Персистентное хранение данных в PostgreSQL.
 - Полная контейнеризация для лёгкого развёртывания.
 
-## Структура проекта
-├── backend/
-│ ├── db/
-│ │ └── init.sql # Схема БД
-│ ├── middleware/
-│ │ └── auth.js # Проверка авторизации (X-User)
-│ ├── routes/
-│ │ ├── auth.js
-│ │ ├── projects.js
-│ │ ├── tasks.js
-│ │ └── members.js
-│ ├── .env.example
-│ ├── Dockerfile
-│ ├── package.json
-│ └── server.js
-├── frontend/
-│ ├── index.html
-│ ├── loginpage.html
-│ ├── register.html
-│ ├── projects.html
-│ ├── task.html
-│ ├── style.css
-│ └── script.js # Клиентская логика (API calls)
-├── docker-compose.yml
-└── README.md
-
-
 ## Запуск проекта через Docker Compose (рекомендуемый способ)
 
 ### Предварительные требования
