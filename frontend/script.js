@@ -1,7 +1,9 @@
 // ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
-let db = null;
-let currentProject = null;
-let loadProjectsFunction = null;
+let currentProject = null;             // для модалки участников
+let loadProjectsFunction = null;       // не используется, оставлено для совместимости
+
+// Базовый URL API (относительный, так как статика и API на одном сервере)
+const API_BASE = '/api';
 
 // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 
@@ -40,6 +42,31 @@ function showMessage(elementId, text, isError = true) {
     }
 }
 
+// Универсальный запрос к API с авторизацией
+async function apiRequest(endpoint, options = {}) {
+    const currentUser = localStorage.getItem('currentUser');
+    const headers = {
+        'Content-Type': 'application/json',
+        ...(currentUser && { 'X-User': currentUser }),
+        ...options.headers
+    };
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers
+    });
+    if (!response.ok) {
+        let errorMsg = 'Ошибка запроса';
+        try {
+            const errorData = await response.json();
+            errorMsg = errorData.error || errorMsg;
+        } catch(e) {}
+        throw new Error(errorMsg);
+    }
+    // Если статус 204 (No Content) или ответ пустой
+    if (response.status === 204) return null;
+    return response.json();
+}
+
 // ========== ФУНКЦИЯ ДЛЯ ОБНОВЛЕНИЯ HEADER ==========
 function updateHeader() {
     const currentUser = localStorage.getItem('currentUser');
@@ -47,7 +74,6 @@ function updateHeader() {
     if (!headerNav) return;
     
     if (currentUser) {
-        // Пользователь авторизован - имя кликабельное, ведет в личный кабинет
         headerNav.innerHTML = `
             <div class="user-info">
                 <div class="user-name" onclick="goToDashboard()" style="cursor: pointer;">
@@ -59,7 +85,6 @@ function updateHeader() {
             </div>
         `;
     } else {
-        // Пользователь не авторизован - показываем ссылки на вход и регистрацию
         const currentPage = window.location.pathname.split('/').pop();
         let links = '';
         if (currentPage !== 'loginpage.html') {
@@ -72,7 +97,6 @@ function updateHeader() {
     }
 }
 
-// Функция перехода в личный кабинет
 function goToDashboard() {
     const currentUser = localStorage.getItem('currentUser');
     if (currentUser) {
@@ -83,24 +107,7 @@ function goToDashboard() {
     }
 }
 
-// ========== ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ ==========
-async function initDatabase() {
-    try {
-        db = window.taskDB;
-        await db.init();
-        console.log('База данных инициализирована');
-        
-        const admin = await db.getUser('admin');
-        if (!admin) {
-            await db.createUser('admin', '12345', 'admin@example.com');
-            console.log('Тестовый пользователь создан: admin / 12345');
-        }
-    } catch (error) {
-        console.error('Ошибка инициализации БД:', error);
-    }
-}
-
-// ========== ГЛАВНАЯ СТРАНИЦА ==========
+// ========== ГЛАВНАЯ СТРАНИЦА (index.html) ==========
 const loginBtn = document.getElementById('goToLoginPage');
 if (loginBtn) {
     loginBtn.onclick = () => {
@@ -130,26 +137,24 @@ if (dashboardBtn) {
 
 // ========== СТРАНИЦА АВТОРИЗАЦИИ ==========
 async function login(username, password) {
-    if (!db) await initDatabase();
-    
-    const isValid = await db.verifyUser(username, password);
-    
-    if (isValid) {
-        localStorage.setItem('currentUser', username);
+    try {
+        const data = await apiRequest('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password })
+        });
+        localStorage.setItem('currentUser', data.username);
         showMessage('loginMessage', 'Добро пожаловать!', false);
         setTimeout(() => {
             window.location.href = 'projects.html';
         }, 1000);
         return true;
-    } else {
-        showMessage('loginMessage', 'Неверный логин или пароль');
+    } catch (err) {
+        showMessage('loginMessage', err.message);
         return false;
     }
 }
 
 if (document.getElementById('loginBtn')) {
-    initDatabase();
-    
     const loginFormBtn = document.getElementById('loginBtn');
     if (loginFormBtn) {
         loginFormBtn.onclick = async () => {
@@ -202,28 +207,22 @@ async function register(username, password, confirmPassword, email) {
     }
     
     try {
-        const existingUser = await db.getUser(username);
-        if (existingUser) {
-            showMessage('regMessage', 'Пользователь с таким именем уже существует');
-            return false;
-        }
-        
-        await db.createUser(username, password, email);
-        
+        await apiRequest('/auth/register', {
+            method: 'POST',
+            body: JSON.stringify({ username, password, email })
+        });
         showMessage('regMessage', 'Регистрация успешна! Перенаправляем на вход...', false);
         setTimeout(() => {
             window.location.href = 'loginpage.html';
         }, 2000);
         return true;
-    } catch (error) {
-        showMessage('regMessage', 'Ошибка при регистрации');
+    } catch (err) {
+        showMessage('regMessage', err.message);
         return false;
     }
 }
 
 if (document.getElementById('registerBtn')) {
-    initDatabase();
-    
     const registerFormBtn = document.getElementById('registerBtn');
     if (registerFormBtn) {
         registerFormBtn.onclick = async () => {
@@ -250,7 +249,6 @@ if (document.getElementById('registerBtn')) {
 }
 
 // ========== СТРАНИЦА ПРОЕКТОВ (projects.html) ==========
-
 if (document.getElementById('projectsContainer')) {
     let currentUser = localStorage.getItem('currentUser');
     
@@ -259,55 +257,57 @@ if (document.getElementById('projectsContainer')) {
         window.location.href = 'loginpage.html';
     }
     
-    initDatabase().then(() => {
-        loadProjects();
-    });
-    
+    // Загрузка и отображение проектов
     async function loadProjects() {
-        const projects = await db.getUserProjects(currentUser);
-        const container = document.getElementById('projectsGrid');
-        
-        if (projects.length === 0) {
-            container.innerHTML = '<p style="text-align:center; color:#666;">У вас пока нет проектов. Создайте первый!</p>';
-            return;
-        }
-        
-        container.innerHTML = projects.map(project => {
-            const isOwner = project.owner === currentUser;
+        try {
+            const projects = await apiRequest('/projects');
+            const container = document.getElementById('projectsGrid');
             
-            return `
-                <div class="project-card" onclick="openProject(${project.id})">
-                    <h3>${escapeHtml(project.name)}</h3>
-                    <p>${escapeHtml(project.description || 'Нет описания')}</p>
-                    <div class="project-meta">
-                        <span>📅 ${new Date(project.createdAt).toLocaleDateString()}</span>
-                        <span>👥 ${project.members ? project.members.length : 1} участников</span>
-                    </div>
-                    <div class="project-meta">
-                        <span>👑 Владелец: ${escapeHtml(project.owner)}</span>
-                    </div>
-                    <div class="project-members">
-                        <div class="members-list">
-                            ${project.members ? project.members.slice(0, 3).map(member => `
-                                <span class="member-tag ${project.owner === member ? 'owner' : ''}">
-                                    ${escapeHtml(member)} ${project.owner === member ? '👑' : ''}
-                                </span>
-                            `).join('') : `<span class="member-tag">${escapeHtml(project.owner)} 👑</span>`}
-                            ${project.members && project.members.length > 3 ? `<span class="member-tag">+${project.members.length - 3}</span>` : ''}
+            if (projects.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#666;">У вас пока нет проектов. Создайте первый!</p>';
+                return;
+            }
+            
+            container.innerHTML = projects.map(project => {
+                const isOwner = project.owner === currentUser;
+                
+                return `
+                    <div class="project-card" onclick="openProject(${project.id})">
+                        <h3>${escapeHtml(project.name)}</h3>
+                        <p>${escapeHtml(project.description || 'Нет описания')}</p>
+                        <div class="project-meta">
+                            <span>📅 ${new Date(project.created_at).toLocaleDateString()}</span>
+                            <span>👥 ${project.members ? project.members.length : 1} участников</span>
+                        </div>
+                        <div class="project-meta">
+                            <span>👑 Владелец: ${escapeHtml(project.owner)}</span>
+                        </div>
+                        <div class="project-members">
+                            <div class="members-list">
+                                ${project.members ? project.members.slice(0, 3).map(member => `
+                                    <span class="member-tag ${project.owner === member ? 'owner' : ''}">
+                                        ${escapeHtml(member)} ${project.owner === member ? '👑' : ''}
+                                    </span>
+                                `).join('') : `<span class="member-tag">${escapeHtml(project.owner)} 👑</span>`}
+                                ${project.members && project.members.length > 3 ? `<span class="member-tag">+${project.members.length - 3}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="project-actions">
+                            ${isOwner ? `
+                                <button class="edit-project" onclick="event.stopPropagation(); editProject(${project.id})">✏️</button>
+                                <button class="edit-project" onclick="event.stopPropagation(); openMembersModal(${project.id})" style="background-color: #667eea;">👥</button>
+                                <button class="delete-project" onclick="event.stopPropagation(); deleteProject(${project.id})">🗑️</button>
+                            ` : `
+                                <button class="edit-project" onclick="event.stopPropagation(); openProject(${project.id})" style="background-color: #667eea;">📋 Открыть</button>
+                            `}
                         </div>
                     </div>
-                    <div class="project-actions">
-                        ${isOwner ? `
-                            <button class="edit-project" onclick="event.stopPropagation(); editProject(${project.id})">✏️</button>
-                            <button class="edit-project" onclick="event.stopPropagation(); openMembersModal(${project.id})" style="background-color: #667eea;">👥</button>
-                            <button class="delete-project" onclick="event.stopPropagation(); deleteProject(${project.id})">🗑️</button>
-                        ` : `
-                            <button class="edit-project" onclick="event.stopPropagation(); openProject(${project.id})" style="background-color: #667eea;">📋 Открыть</button>
-                        `}
-                    </div>
-                </div>
-            `;
-        }).join('');
+                `;
+            }).join('');
+        } catch (err) {
+            console.error(err);
+            alert('Ошибка загрузки проектов');
+        }
     }
     
     window.openProject = (projectId) => {
@@ -316,30 +316,41 @@ if (document.getElementById('projectsContainer')) {
     };
     
     window.editProject = async (projectId) => {
-        const project = await db.getProjectById(projectId);
-        document.getElementById('projectName').value = project.name;
-        document.getElementById('projectDescription').value = project.description || '';
-        document.getElementById('modalTitle').textContent = 'Редактировать проект';
-        document.getElementById('projectModal').classList.add('active');
-        
-        const saveBtn = document.getElementById('saveProjectBtn');
-        saveBtn.onclick = async () => {
-            const name = document.getElementById('projectName').value;
-            const description = document.getElementById('projectDescription').value;
-            await db.updateProject(projectId, { name, description });
-            closeModal();
-            loadProjects();
-        };
+        try {
+            const project = await apiRequest(`/projects/${projectId}`);
+            document.getElementById('projectName').value = project.name;
+            document.getElementById('projectDescription').value = project.description || '';
+            document.getElementById('modalTitle').textContent = 'Редактировать проект';
+            document.getElementById('projectModal').classList.add('active');
+            
+            const saveBtn = document.getElementById('saveProjectBtn');
+            saveBtn.onclick = async () => {
+                const name = document.getElementById('projectName').value;
+                const description = document.getElementById('projectDescription').value;
+                await apiRequest(`/projects/${projectId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ name, description })
+                });
+                closeModal();
+                loadProjects();
+            };
+        } catch (err) {
+            alert('Ошибка загрузки проекта');
+        }
     };
     
     window.deleteProject = async (projectId) => {
         if (confirm('Вы уверены, что хотите удалить проект? Все задачи также будут удалены!')) {
-            await db.deleteProject(projectId);
-            loadProjects();
+            try {
+                await apiRequest(`/projects/${projectId}`, { method: 'DELETE' });
+                loadProjects();
+            } catch (err) {
+                alert('Ошибка удаления');
+            }
         }
     };
     
-    // Модальное окно для создания проекта
+    // Модальное окно для создания/редактирования проекта
     const modal = document.getElementById('projectModal');
     const createBtn = document.getElementById('createProjectBtn');
     const cancelBtn = document.getElementById('cancelModalBtn');
@@ -368,201 +379,172 @@ if (document.getElementById('projectsContainer')) {
                 return;
             }
             
-            await db.createProject({
-                name: name,
-                description: description,
-                owner: currentUser
-            });
-            
-            closeModal();
-            loadProjects();
+            try {
+                await apiRequest('/projects', {
+                    method: 'POST',
+                    body: JSON.stringify({ name, description })
+                });
+                closeModal();
+                loadProjects();
+            } catch (err) {
+                alert('Ошибка создания проекта');
+            }
         };
     }
     
     function closeModal() {
         modal.classList.remove('active');
     }
-    
     window.closeModal = closeModal;
     
     modal.addEventListener('click', (e) => {
         if (e.target === modal) closeModal();
     });
+    
+    // Загружаем проекты при старте
+    loadProjects();
 }
 
 // ========== УПРАВЛЕНИЕ УЧАСТНИКАМИ ПРОЕКТА ==========
-
 let currentMembersProject = null;
 
+// Загрузить участников в выпадающий список при создании/редактировании задачи
 async function loadProjectMembersForTask(projectId) {
-    const project = await db.getProjectById(projectId);
-    const assigneeSelect = document.getElementById('taskAssignee');
-    
-    if (!assigneeSelect) return;
-    
-    assigneeSelect.innerHTML = '<option value="">Не назначен</option>';
-    
-    if (project && project.members) {
-        project.members.forEach(member => {
-            assigneeSelect.innerHTML += `<option value="${escapeHtml(member)}">${escapeHtml(member)}</option>`;
-        });
+    try {
+        const project = await apiRequest(`/projects/${projectId}`);
+        const assigneeSelect = document.getElementById('taskAssignee');
+        if (!assigneeSelect) return;
+        
+        assigneeSelect.innerHTML = '<option value="">Не назначен</option>';
+        if (project && project.members) {
+            project.members.forEach(member => {
+                assigneeSelect.innerHTML += `<option value="${escapeHtml(member)}">${escapeHtml(member)}</option>`;
+            });
+        }
+    } catch (err) {
+        console.error('Ошибка загрузки участников для задачи', err);
     }
 }
 
 window.openMembersModal = async (projectId) => {
-    const project = await db.getProjectById(projectId);
-    if (!project) return;
-    
-    currentMembersProject = project;
-    document.getElementById('membersProjectName').textContent = project.name;
-    document.getElementById('membersModal').classList.add('active');
-    
-    document.getElementById('newMemberLogin').value = '';
-    document.getElementById('memberMessage').textContent = '';
-    
-    await loadMembersList(projectId);
+    try {
+        const project = await apiRequest(`/projects/${projectId}`);
+        if (!project) return;
+        
+        currentMembersProject = project;
+        document.getElementById('membersProjectName').textContent = project.name;
+        document.getElementById('membersModal').classList.add('active');
+        
+        document.getElementById('newMemberLogin').value = '';
+        document.getElementById('memberMessage').textContent = '';
+        
+        await loadMembersList(projectId);
+    } catch (err) {
+        alert('Ошибка загрузки данных проекта');
+    }
 };
 
-// Загрузить список участников
 async function loadMembersList(projectId) {
-    const project = await db.getProjectById(projectId);
-    if (!project) return;
-    
-    const container = document.getElementById('membersList');
-    const currentUser = localStorage.getItem('currentUser');
-    const isOwner = project.owner === currentUser;
-    
-    if (!project.members || project.members.length === 0) {
-        container.innerHTML = '<p style="text-align:center; color:#999;">Нет участников</p>';
-        return;
-    }
-    
-    container.innerHTML = project.members.map(member => {
-        return `
-            <div class="members-modal-item">
-                <div class="member-info">
-                    <div class="member-avatar">${member.charAt(0).toUpperCase()}</div>
-                    <div class="member-details">
-                        <div class="member-login">${escapeHtml(member)}</div>
-                        <div class="member-role ${project.owner === member ? 'owner' : ''}">
-                            ${project.owner === member ? '👑 Владелец' : '👤 Участник'}
+    try {
+        const project = await apiRequest(`/projects/${projectId}`);
+        if (!project) return;
+        
+        const container = document.getElementById('membersList');
+        const currentUser = localStorage.getItem('currentUser');
+        const isOwner = project.owner === currentUser;
+        
+        if (!project.members || project.members.length === 0) {
+            container.innerHTML = '<p style="text-align:center; color:#999;">Нет участников</p>';
+            return;
+        }
+        
+        container.innerHTML = project.members.map(member => {
+            return `
+                <div class="members-modal-item">
+                    <div class="member-info">
+                        <div class="member-avatar">${member.charAt(0).toUpperCase()}</div>
+                        <div class="member-details">
+                            <div class="member-login">${escapeHtml(member)}</div>
+                            <div class="member-role ${project.owner === member ? 'owner' : ''}">
+                                ${project.owner === member ? '👑 Владелец' : '👤 Участник'}
+                            </div>
                         </div>
                     </div>
+                    ${isOwner && project.owner !== member ? `
+                        <button class="remove-member-btn" onclick="removeMember(${projectId}, '${member.replace(/'/g, "\\'")}')">
+                            🗑️ Удалить
+                        </button>
+                    ` : ''}
                 </div>
-                ${isOwner && project.owner !== member ? `
-                    <button class="remove-member-btn" onclick="removeMember(${projectId}, '${member.replace(/'/g, "\\'")}')">
-                        🗑️ Удалить
-                    </button>
-                ` : ''}
-            </div>
-        `;
-    }).join('');
+            `;
+        }).join('');
+    } catch (err) {
+        console.error(err);
+        alert('Ошибка загрузки участников');
+    }
 }
 
 window.addMember = async (projectId, username) => {
-    const project = await db.getProjectById(projectId);
-    const currentUser = localStorage.getItem('currentUser');
     const messageDiv = document.getElementById('memberMessage');
     
-    // Проверка прав (только владелец может добавлять)
-    if (project.owner !== currentUser) {
-        messageDiv.textContent = 'Только владелец проекта может добавлять участников';
-        messageDiv.className = 'member-message error';
-        setTimeout(() => {
-            messageDiv.textContent = '';
-            messageDiv.className = 'member-message';
-        }, 3000);
-        return;
-    }
-    
-    // Проверка существования пользователя
-    const user = await db.getUser(username);
-    if (!user) {
-        messageDiv.textContent = `Пользователь "${username}" не найден`;
-        messageDiv.className = 'member-message error';
-        setTimeout(() => {
-            messageDiv.textContent = '';
-            messageDiv.className = 'member-message';
-        }, 3000);
-        return;
-    }
-    
-    // Проверка, не является ли пользователь уже участником
-    if (project.members && project.members.includes(username)) {
-        messageDiv.textContent = `Пользователь "${username}" уже является участником проекта`;
-        messageDiv.className = 'member-message error';
-        setTimeout(() => {
-            messageDiv.textContent = '';
-            messageDiv.className = 'member-message';
-        }, 3000);
-        return;
-    }
-    
-    // Добавляем участника
-    const updatedMembers = [...(project.members || []), username];
-    await db.updateProject(projectId, { members: updatedMembers });
-    
-    // Обновляем currentMembersProject
-    currentMembersProject = await db.getProjectById(projectId);
-    
-    // Обновляем список участников в модальном окне
-    await loadMembersList(projectId);
-    
-    // Показываем успех
-    messageDiv.textContent = `Пользователь "${username}" добавлен в проект`;
-    messageDiv.className = 'member-message success';
-    setTimeout(() => {
-        messageDiv.textContent = '';
-        messageDiv.className = 'member-message';
-    }, 2000);
-    
-    // Очищаем поле ввода
-    document.getElementById('newMemberLogin').value = '';
-    
-    // Обновляем список проектов на главной странице проектов
-    if (typeof loadProjects === 'function') {
-        await loadProjects();
-    }
-};
-
-window.removeMember = async (projectId, username) => {
-    console.log('removeMember called with:', projectId, username); // Для отладки
-    
-    const project = await db.getProjectById(projectId);
-    const currentUser = localStorage.getItem('currentUser');
-    
-    // Проверка прав (только владелец может удалять)
-    if (project.owner !== currentUser) {
-        alert('Только владелец проекта может удалять участников');
-        return;
-    }
-    
-    if (!confirm(`Удалить пользователя "${username}" из проекта?`)) return;
-    
-    // Удаляем участника из списка
-    const updatedMembers = project.members.filter(m => m !== username);
-    await db.updateProject(projectId, { members: updatedMembers });
-    
-    // Обновляем currentMembersProject
-    currentMembersProject = await db.getProjectById(projectId);
-    
-    // Обновляем список участников в модальном окне
-    await loadMembersList(projectId);
-    
-    // Обновляем список проектов на главной странице проектов
-    if (typeof loadProjects === 'function') {
-        await loadProjects();
-    }
-    
-    // Показываем сообщение об успехе
-    const messageDiv = document.getElementById('memberMessage');
-    if (messageDiv) {
-        messageDiv.textContent = `Пользователь "${username}" удален из проекта`;
+    try {
+        await apiRequest(`/members/${projectId}`, {
+            method: 'POST',
+            body: JSON.stringify({ username })
+        });
+        
+        // Обновляем currentMembersProject
+        currentMembersProject = await apiRequest(`/projects/${projectId}`);
+        
+        await loadMembersList(projectId);
+        
+        messageDiv.textContent = `Пользователь "${username}" добавлен в проект`;
         messageDiv.className = 'member-message success';
         setTimeout(() => {
             messageDiv.textContent = '';
             messageDiv.className = 'member-message';
         }, 2000);
+        
+        document.getElementById('newMemberLogin').value = '';
+        
+        // Обновляем список проектов на главной странице проектов
+        if (document.getElementById('projectsContainer')) {
+            loadProjects();  // функция из области видимости projects.html
+        }
+    } catch (err) {
+        messageDiv.textContent = err.message;
+        messageDiv.className = 'member-message error';
+        setTimeout(() => {
+            messageDiv.textContent = '';
+            messageDiv.className = 'member-message';
+        }, 3000);
+    }
+};
+
+window.removeMember = async (projectId, username) => {
+    if (!confirm(`Удалить пользователя "${username}" из проекта?`)) return;
+    
+    try {
+        await apiRequest(`/members/${projectId}/${encodeURIComponent(username)}`, { method: 'DELETE' });
+        
+        currentMembersProject = await apiRequest(`/projects/${projectId}`);
+        await loadMembersList(projectId);
+        
+        if (document.getElementById('projectsContainer')) {
+            loadProjects();
+        }
+        
+        const messageDiv = document.getElementById('memberMessage');
+        if (messageDiv) {
+            messageDiv.textContent = `Пользователь "${username}" удален из проекта`;
+            messageDiv.className = 'member-message success';
+            setTimeout(() => {
+                messageDiv.textContent = '';
+                messageDiv.className = 'member-message';
+            }, 2000);
+        }
+    } catch (err) {
+        alert('Ошибка при удалении участника');
     }
 };
 
@@ -613,7 +595,6 @@ if (membersModal) {
 }
 
 // ========== СТРАНИЦА ЗАДАЧ (task.html) ==========
-
 if (document.getElementById('kanbanBoard')) {
     let currentUser = localStorage.getItem('currentUser');
     let projectId = localStorage.getItem('currentProject');
@@ -628,24 +609,34 @@ if (document.getElementById('kanbanBoard')) {
         window.location.href = 'projects.html';
     }
     
-    initDatabase().then(async () => {
-        const project = await db.getProjectById(parseInt(projectId));
-        if (project) {
-            document.getElementById('projectTitle').textContent = project.name;
+    // Загружаем информацию о проекте и задачи
+    (async () => {
+        try {
+            const project = await apiRequest(`/projects/${projectId}`);
+            if (project) {
+                document.getElementById('projectTitle').textContent = project.name;
+            }
+            await loadTasks();
+        } catch (err) {
+            alert('Ошибка загрузки проекта');
         }
-        loadTasks();
-    });
+    })();
     
     async function loadTasks() {
-        const tasks = await db.getProjectTasks(parseInt(projectId));
-        
-        const todoTasks = tasks.filter(t => t.status === 'todo');
-        const inProgressTasks = tasks.filter(t => t.status === 'in_progress');
-        const doneTasks = tasks.filter(t => t.status === 'done');
-        
-        renderColumn('todo', todoTasks);
-        renderColumn('in-progress', inProgressTasks);
-        renderColumn('done', doneTasks);
+        try {
+            const tasks = await apiRequest(`/tasks/project/${projectId}`);
+            
+            const todoTasks = tasks.filter(t => t.status === 'todo');
+            const inProgressTasks = tasks.filter(t => t.status === 'in_progress');
+            const doneTasks = tasks.filter(t => t.status === 'done');
+            
+            renderColumn('todo', todoTasks);
+            renderColumn('in-progress', inProgressTasks);
+            renderColumn('done', doneTasks);
+        } catch (err) {
+            console.error(err);
+            alert('Ошибка загрузки задач');
+        }
     }
     
     function renderColumn(columnId, tasks) {
@@ -665,7 +656,7 @@ if (document.getElementById('kanbanBoard')) {
                     <span class="task-priority priority-${task.priority}">${getPriorityText(task.priority)}</span>
                     ${task.deadline ? `<span class="task-deadline">📅 ${new Date(task.deadline).toLocaleDateString()}</span>` : ''}
                 </div>
-                ${task.assignedTo ? `<div class="task-meta" style="margin-top: 5px;"><span>👤 ${escapeHtml(task.assignedTo)}</span></div>` : ''}
+                ${task.assigned_to ? `<div class="task-meta" style="margin-top: 5px;"><span>👤 ${escapeHtml(task.assigned_to)}</span></div>` : ''}
                 <div class="task-actions" style="margin-top:8px;">
                     <button class="edit-task" onclick="editTask(${task.id})" style="background:none; border:none; cursor:pointer;">✏️</button>
                     <button class="delete-task" onclick="deleteTask(${task.id})" style="background:none; border:none; cursor:pointer; color:#dc3545;">🗑️</button>
@@ -696,8 +687,15 @@ if (document.getElementById('kanbanBoard')) {
         e.preventDefault();
         const taskId = e.dataTransfer.getData('taskId');
         if (taskId) {
-            await db.updateTask(parseInt(taskId), { status: newStatus });
-            loadTasks();
+            try {
+                await apiRequest(`/tasks/${taskId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ status: newStatus })
+                });
+                await loadTasks();
+            } catch (err) {
+                alert('Ошибка перемещения задачи');
+            }
         }
     };
     
@@ -706,49 +704,60 @@ if (document.getElementById('kanbanBoard')) {
     };
     
     window.editTask = async (taskId) => {
-        const task = await db.getTaskById(taskId);
-        if (!task) return;
-        
-        await loadProjectMembersForTask(parseInt(projectId));
-        
-        document.getElementById('taskTitle').value = task.title;
-        document.getElementById('taskDescription').value = task.description || '';
-        document.getElementById('taskPriority').value = task.priority;
-        document.getElementById('taskDeadline').value = task.deadline ? task.deadline.split('T')[0] : '';
-        document.getElementById('taskAssignee').value = task.assignedTo || '';
-        
-        document.getElementById('taskModal').classList.add('active');
-        
-        const saveTaskBtn = document.getElementById('saveTaskBtn');
-        saveTaskBtn.onclick = async () => {
-            const title = document.getElementById('taskTitle').value;
-            const description = document.getElementById('taskDescription').value;
-            const priority = document.getElementById('taskPriority').value;
-            const deadline = document.getElementById('taskDeadline').value;
-            const assignedTo = document.getElementById('taskAssignee').value || null;
+        try {
+            const task = await apiRequest(`/tasks/${taskId}`);
+            if (!task) return;
             
-            if (!title) {
-                alert('Введите название задачи');
-                return;
-            }
+            await loadProjectMembersForTask(parseInt(projectId));
             
-            await db.updateTask(taskId, {
-                title,
-                description,
-                priority,
-                deadline: deadline || null,
-                assignedTo: assignedTo
-            });
+            document.getElementById('taskTitle').value = task.title;
+            document.getElementById('taskDescription').value = task.description || '';
+            document.getElementById('taskPriority').value = task.priority;
+            document.getElementById('taskDeadline').value = task.deadline ? task.deadline.split('T')[0] : '';
+            document.getElementById('taskAssignee').value = task.assigned_to || '';
             
-            closeTaskModal();
-            loadTasks();
-        };
+            document.getElementById('taskModal').classList.add('active');
+            
+            const saveTaskBtn = document.getElementById('saveTaskBtn');
+            saveTaskBtn.onclick = async () => {
+                const title = document.getElementById('taskTitle').value;
+                const description = document.getElementById('taskDescription').value;
+                const priority = document.getElementById('taskPriority').value;
+                const deadline = document.getElementById('taskDeadline').value;
+                const assignedTo = document.getElementById('taskAssignee').value || null;
+                
+                if (!title) {
+                    alert('Введите название задачи');
+                    return;
+                }
+                
+                await apiRequest(`/tasks/${taskId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        title,
+                        description,
+                        priority,
+                        deadline: deadline || null,
+                        assignedTo: assignedTo
+                    })
+                });
+                
+                closeTaskModal();
+                await loadTasks();
+            };
+        } catch (err) {
+            alert('Ошибка загрузки задачи');
+        }
     };
     
     window.deleteTask = async (taskId) => {
         if (confirm('Удалить задачу?')) {
-            await db.deleteTask(taskId);
-            loadTasks();
+            try {
+                await apiRequest(`/tasks/${taskId}`, { method: 'DELETE' });
+                await loadTasks();
+            } catch (err) {
+                alert('Ошибка удаления задачи');
+            }
         }
     };
     
@@ -776,26 +785,30 @@ if (document.getElementById('kanbanBoard')) {
                 return;
             }
             
-            await db.createTask({
-                title,
-                description,
-                priority,
-                deadline: deadline || null,
-                assignedTo: assignedTo,
-                projectId: parseInt(projectId),
-                createdBy: currentUser,
-                status: 'todo'
-            });
-            
-            closeTaskModal();
-            loadTasks();
+            try {
+                await apiRequest('/tasks', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        title,
+                        description,
+                        priority,
+                        deadline: deadline || null,
+                        assignedTo: assignedTo,
+                        projectId: parseInt(projectId),
+                        status: 'todo'
+                    })
+                });
+                closeTaskModal();
+                await loadTasks();
+            } catch (err) {
+                alert('Ошибка создания задачи');
+            }
         };
     };
     
     function closeTaskModal() {
         document.getElementById('taskModal').classList.remove('active');
     }
-    
     window.closeTaskModal = closeTaskModal;
     
     const taskModal = document.getElementById('taskModal');
@@ -807,7 +820,6 @@ if (document.getElementById('kanbanBoard')) {
 }
 
 // ========== ВЫХОД ИЗ СИСТЕМЫ ==========
-
 function logout() {
     localStorage.removeItem('currentUser');
     localStorage.removeItem('currentProject');
